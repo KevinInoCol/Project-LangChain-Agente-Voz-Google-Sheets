@@ -1,0 +1,12 @@
+langchain>=1.0.0
+langchain-openai
+langgraph>=1.0.0
+numpy
+openai
+openai-whisper
+pandas
+pynput
+python-dotenv
+sounddevice
+soundfile
+tabulate
