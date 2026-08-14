@@ -103,7 +103,13 @@ pip install -r requirements.txt
 
 **3. Configurar variables de entorno:**
 
-Crea un archivo `.env` en la raíz del proyecto:
+Copia la plantilla y rellena los valores:
+
+```bash
+cp .env.example .env
+```
+
+El `.env` está en `.gitignore` y no debe subirse nunca. Contenido:
 
 ```
 OPENAI_API_KEY=sk-...
