@@ -25,7 +25,7 @@ client = openai.Client()
 
 class TalkingLLM():
 
-    def __init__(self, model="gpt-3.5-turbo", whisper_size="small"):
+    def __init__(self, model="gpt-5", whisper_size="small"):
         self.is_recording = False #Para la Grabación de mi voz
         self.audio_data = [] #Para la Grabación de mi voz
         self.samplerate=44100 #Parámetros para la digitalización de mi voz
