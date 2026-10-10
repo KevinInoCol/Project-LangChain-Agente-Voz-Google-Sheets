@@ -257,6 +257,62 @@ system_prompt: |
 
 ---
 
+## `model_config/model_config.yaml`
+
+```yaml
+name: <slug>-model-config
+version: 1.0.0
+description: >
+  Configuración de los modelos del agente de voz: LLM (init_chat_model),
+  ventana de memoria (SummarizationMiddleware), límites del grafo, STT y TTS.
+  Las instrucciones del agente viven en prompt/prompt.yaml.
+author: <email>
+created_at: <YYYY-MM-DD>
+tags: [voz, configuracion, llm, whisper, tts]
+
+# LLM del agente  ->  init_chat_model(model, **params)
+llm:
+  model: openai:gpt-4.1-mini   # siempre con prefijo de proveedor
+  params:
+    temperature: 0
+    max_tokens: 500            # la respuesta se escucha; corta es mejor
+    timeout: 60
+    max_retries: 2
+
+# Memoria  ->  SummarizationMiddleware(model, trigger=tuple(...), keep=tuple(...))
+# [tipo, valor] con tipo en messages | tokens | fraction. Son MENSAJES, no turnos.
+summarization:
+  model: null                  # null = reutiliza el LLM del agente
+  trigger: [messages, 20]
+  keep: [messages, 10]
+
+# Ejecución  ->  config de agent.invoke(...)
+agent:
+  recursion_limit: 50
+
+# Speech-to-Text  ->  whisper.load_model(model_size) / transcribe(...)
+stt:
+  provider: whisper-local
+  model_size: small            # tiny | base | small | medium | large
+  fp16: false
+  language: null               # null = autodetección
+
+# Text-to-Speech  ->  client.audio.speech.create(...)
+tts:
+  provider: openai
+  model: tts-1
+  voice: alloy
+  response_format: opus
+
+# Audio de entrada  ->  sounddevice.InputStream(...)
+audio:
+  samplerate: 44100
+  channels: 1
+  dtype: int16
+```
+
+---
+
 ## `agent.py`
 
 ```python
@@ -277,6 +333,7 @@ from pathlib import Path
 
 import yaml
 from langchain.agents import create_agent
+from langchain.agents.middleware import SummarizationMiddleware
 from langchain.chat_models import init_chat_model
 
 from conversation_history import get_checkpointer
@@ -284,8 +341,13 @@ from tools import get_<tool>_tool
 
 BASE_DIR = Path(__file__).resolve().parent
 PROMPT_PATH = BASE_DIR / "prompt" / "prompt.yaml"
+MODEL_CONFIG_PATH = BASE_DIR / "model_config" / "model_config.yaml"
 
-DEFAULT_MODEL = "openai:gpt-4.1-mini"
+
+def load_model_config() -> dict:
+    """Carga model_config/model_config.yaml (LLM, memoria, STT, TTS, audio)."""
+    with open(MODEL_CONFIG_PATH, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
 
 def load_system_prompt(**contexto) -> str:
@@ -298,11 +360,24 @@ def load_system_prompt(**contexto) -> str:
     return system_prompt
 
 
-def build_agent(model: str = DEFAULT_MODEL, con_memoria: bool = True):
+def build_agent(model: str | None = None, con_memoria: bool = True):
+    """`model` es un override puntual; si es None manda model_config.yaml."""
+    cfg = load_model_config()
+    llm = init_chat_model(model or cfg["llm"]["model"], **cfg["llm"].get("params", {}))
+
+    resumen = cfg["summarization"]
     return create_agent(
-        init_chat_model(model),
+        llm,
         tools=[get_<tool>_tool(...)],
         system_prompt=load_system_prompt(...),
+        #YAML no tiene tuplas: trigger/keep llegan como lista
+        middleware=[
+            SummarizationMiddleware(
+                resumen.get("model") or llm,
+                trigger=tuple(resumen["trigger"]),
+                keep=tuple(resumen["keep"]),
+            )
+        ],
         checkpointer=get_checkpointer() if con_memoria else None,
     )
 ```
@@ -316,9 +391,14 @@ class TalkingLLM:
     """Voz → Whisper → agent.invoke → TTS → audio. Sin lógica de negocio."""
 
     def __init__(self, session_id: str | None = None):
+        self.cfg = load_model_config()                  # stt / tts / audio / agent
+        self.whisper = whisper.load_model(self.cfg["stt"]["model_size"])
         self.agent = build_agent()
         self.session_id = validar_sesion(session_id) if session_id else nueva_sesion()
-        self.config = {"configurable": {"thread_id": self.session_id}}
+        self.config = {
+            "configurable": {"thread_id": self.session_id},
+            "recursion_limit": self.cfg["agent"]["recursion_limit"],
+        }
 
     def convert_and_play(self):
         texto = self.transcribe()                       # Whisper

@@ -1,0 +1,68 @@
+name: agente-voz-inmobiliario-sao-paulo-model-config
+version: 1.0.0
+description: >
+  Configuración de los modelos del agente de voz Kevão: LLM del agente
+  (init_chat_model), ventana de memoria (SummarizationMiddleware), límites de
+  ejecución del grafo, STT (Whisper local) y TTS (OpenAI). Las instrucciones
+  del agente viven aparte, en prompt/prompt.yaml.
+author: kevin.inofuente.colque.27@gmail.com
+created_at: 2026-10-09
+tags: [voz, configuracion, llm, whisper, tts]
+
+# ============================================================
+# LLM del agente  ->  init_chat_model(model, **params)
+# ============================================================
+# `model` va con prefijo de proveedor ("openai:..."): init_chat_model lo
+# recomienda frente a inferir el proveedor por el nombre.
+# Todo lo de `params` se pasa como kwargs al ChatOpenAI subyacente.
+llm:
+  model: openai:gpt-4.1-mini
+  params:
+    temperature: 0        # análisis de datos: queremos cifras, no creatividad
+    max_tokens: 500       # la respuesta se escucha; corta es mejor
+    timeout: 60           # segundos de espera por respuesta
+    max_retries: 2        # reintentos ante errores transitorios de la API
+
+# ============================================================
+# Memoria  ->  SummarizationMiddleware(llm, trigger=..., keep=...)
+# ============================================================
+# Formato ContextSize: [tipo, valor] con tipo en messages | tokens | fraction.
+# Ojo: son MENSAJES, no turnos; una pregunta con tool genera ~4
+# (pregunta, tool call, resultado, respuesta).
+# `model: null` = reutiliza el mismo LLM del agente para resumir.
+summarization:
+  model: null
+  trigger: [messages, 20]   # al llegar a 20 mensajes se resumen los antiguos
+  keep: [messages, 10]      # se conservan íntegros los 10 más recientes
+
+# ============================================================
+# Ejecución del agente  ->  config de agent.invoke(...)
+# ============================================================
+agent:
+  recursion_limit: 50       # pasos máximos del grafo por turno (evita bucles de tool)
+
+# ============================================================
+# Speech-to-Text  ->  whisper.load_model(size) / transcribe(...)
+# ============================================================
+stt:
+  provider: whisper-local
+  model_size: small         # tiny | base | small | medium | large
+  fp16: false               # false en CPU / Apple Silicon (evita el warning)
+  language: null            # null = autodetección; "es" fuerza español
+
+# ============================================================
+# Text-to-Speech  ->  client.audio.speech.create(...)
+# ============================================================
+tts:
+  provider: openai
+  model: tts-1
+  voice: alloy
+  response_format: opus
+
+# ============================================================
+# Audio de entrada  ->  sounddevice.InputStream(...)
+# ============================================================
+audio:
+  samplerate: 44100
+  channels: 1
+  dtype: int16

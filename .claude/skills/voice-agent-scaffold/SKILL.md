@@ -1,6 +1,6 @@
 ---
 name: voice-agent-scaffold
-description: Estructura canónica para proyectos de agentes de voz (LangChain v1 + Whisper STT + TTS) — conversation_history/ con checkpointer PostgreSQL, prompt/prompt.yaml con tags, una tool por módulo dentro de tools/, y data/ solo para datasets batch. Use when scaffolding a new voice agent project, adding a tool or an API endpoint to one, deciding where a new file belongs, wiring conversation memory or the system prompt, or refactoring an existing voice/chat agent into this layout.
+description: Estructura canónica para proyectos de agentes de voz (LangChain v1 + Whisper STT + TTS) — conversation_history/ con checkpointer PostgreSQL, prompt/prompt.yaml con tags, model_config/model_config.yaml con la configuración de LLM/memoria/STT/TTS, una tool por módulo dentro de tools/, y data/ solo para datasets batch. Use when scaffolding a new voice agent project, adding a tool or an API endpoint to one, deciding where a new file belongs, wiring conversation memory or the system prompt, or refactoring an existing voice/chat agent into this layout.
 ---
 
 # Scaffold de proyectos de agente de voz
@@ -17,6 +17,8 @@ Antes de escribir código LangChain, aplica también las skills **`langchain-mcp
 ├── talking_llm.py               # capa de voz: hotkey → grabación → Whisper → agent → TTS
 ├── prompt/
 │   └── prompt.yaml              # system prompt: metadata + bloque system_prompt con TAGS
+├── model_config/
+│   └── model_config.yaml        # LLM + params, memoria, recursion_limit, STT, TTS, audio
 ├── tools/
 │   ├── __init__.py              # re-exporta cada tool
 │   ├── <tool_uno>.py            # 1 módulo = 1 tool
@@ -93,7 +95,26 @@ system_prompt: |
 - Los placeholders se declaran en `variables:` y se sustituyen en `load_system_prompt()`. Nunca hardcodees en el YAML datos que se pueden calcular en runtime.
 - Un prompt por agente. Si hay varios agentes: `prompt/<agente>.yaml`.
 
-### 4. `tools/` — una tool por módulo, siempre
+### 4. `model_config/model_config.yaml` — la configuración de modelos, fuera del código
+
+`prompt.yaml` dice **qué hace** el agente; `model_config.yaml` dice **con qué modelos y parámetros** corre. Nunca se mezclan: ni instrucciones en `model_config.yaml`, ni modelo/temperatura en `prompt.yaml`, ni ninguno de los dos hardcodeado en `.py`.
+
+| Bloque | Lo consume | Contenido |
+|---|---|---|
+| `llm` | `init_chat_model(model, **params)` | `model` con prefijo de proveedor (`openai:gpt-4.1-mini`) + `params`: `temperature`, `max_tokens`, `timeout`, `max_retries` |
+| `summarization` | `SummarizationMiddleware` | `model` (`null` = el mismo LLM), `trigger` y `keep` como `[tipo, valor]` |
+| `agent` | config de `agent.invoke` | `recursion_limit` |
+| `stt` | `whisper.load_model` / `transcribe` | `model_size`, `fp16`, `language` |
+| `tts` | `client.audio.speech.create` | `model`, `voice`, `response_format` |
+| `audio` | `sounddevice.InputStream` | `samplerate`, `channels`, `dtype` |
+
+- Mismo encabezado de metadata que `prompt.yaml` (`name`, `version`, `description`, `author`, `created_at`, `tags`).
+- `agent.py` lo lee con `load_model_config()`; la capa de voz lee `stt`, `tts`, `audio` y `agent` del mismo archivo.
+- YAML no tiene tuplas: `trigger` y `keep` se escriben como lista y se convierten con `tuple(...)` al pasarlos a `SummarizationMiddleware`.
+- Sin secretos: las API keys van en `.env`, nunca aquí.
+- `build_agent(model=None)` acepta un override puntual (tests, comparar modelos); si es `None`, manda el YAML.
+
+### 5. `tools/` — una tool por módulo, siempre
 
 - **Un módulo Python = exactamente una tool.** Dos `@tool` en el mismo archivo es un error de estructura, aunque sean parecidas.
 - Nombre del archivo = nombre de la tool (`query_dataframe.py` → `query_dataframe`).
@@ -104,7 +125,7 @@ system_prompt: |
 - `tools/__init__.py` re-exporta la función imperativa y la factory de cada módulo.
 - `agent.py` las ensambla: `tools=[get_a_tool(...), get_b_tool(...)]`.
 
-### 5. `data/` — opcional, solo batch local
+### 6. `data/` — opcional, solo batch local
 
 | Origen de los datos | Dónde va |
 |---|---|
@@ -126,7 +147,7 @@ tools/
 
 Nunca un `api_client.py` con las tres tools dentro. El HTTP compartido (base URL, headers, auth) va en un helper aparte —`tools/_http.py` o `clients/`— que **no** define tools.
 
-### 6. `agent.py` — orquestador sin audio
+### 7. `agent.py` — orquestador sin audio
 
 Expone `build_agent()` y no importa nada de micrófono ni de TTS, para poder probar el agente por texto:
 
@@ -136,15 +157,15 @@ config = {"configurable": {"thread_id": nueva_sesion()}}
 agent.invoke({"messages": [{"role": "user", "content": "..."}]}, config)
 ```
 
-Ensambla: carga de datos (si aplica) → `load_system_prompt()` → `create_agent(init_chat_model(model), tools=[...], system_prompt=..., checkpointer=get_checkpointer())`.
+Ensambla: carga de datos (si aplica) → `load_model_config()` → `load_system_prompt()` → `create_agent(init_chat_model(cfg["llm"]["model"], **cfg["llm"]["params"]), tools=[...], system_prompt=..., middleware=[SummarizationMiddleware(...)], checkpointer=get_checkpointer())`.
 
-### 7. Capa de voz — separada
+### 8. Capa de voz — separada
 
-La clase de voz (`TalkingLLM` o equivalente) solo hace: hotkey → grabar → WAV → Whisper (STT) → `agent.invoke` → TTS → reproducir → `registrar_turno()`. Si toca lógica de negocio, está mal ubicada.
+La clase de voz (`TalkingLLM` o equivalente) solo hace: hotkey → grabar → WAV → Whisper (STT) → `agent.invoke` → TTS → reproducir → `registrar_turno()`. Si toca lógica de negocio, está mal ubicada. Tamaño de Whisper, voz/modelo de TTS, parámetros de audio y `recursion_limit` salen de `model_config.yaml`.
 
 ## Checklist al crear un proyecto nuevo
 
-1. `agent.py`, `prompt/prompt.yaml`, `tools/`, `conversation_history/` — los cuatro, siempre.
+1. `agent.py`, `prompt/prompt.yaml`, `model_config/model_config.yaml`, `tools/`, `conversation_history/` — los cinco, siempre.
 2. `data/` solo si hay dataset batch local.
 3. `.env.example` con `OPENAI_API_KEY` + las cinco `DB_*` + comentario del puerto 5432.
 4. `.gitignore` con `.env`, `__pycache__/`, `*.wav`.
@@ -156,4 +177,5 @@ La clase de voz (`TalkingLLM` o equivalente) solo hace: hotkey → grabar → WA
 
 - ¿Nueva capacidad del agente? → módulo nuevo en `tools/`, registrar en `__init__.py` y en `agent.py`, y documentarla en `<Herramientas_Disponibles>` del prompt. Las tres cosas.
 - ¿Cambia el comportamiento/tono/reglas? → se edita `prompt/prompt.yaml`, **no** se hardcodea en Python.
-- ¿Aparece un `chat_history.py` suelto, dos tools en un módulo o instrucciones de prompt dentro de `.py`? → señálalo y ofrece moverlo a la estructura canónica.
+- ¿Cambia el modelo, la temperatura, la ventana de memoria, la voz o el tamaño de Whisper? → se edita `model_config/model_config.yaml`, **no** el `.py`.
+- ¿Aparece un `chat_history.py` suelto, dos tools en un módulo, instrucciones de prompt dentro de `.py` o un `DEFAULT_MODEL`/`temperature` hardcodeado? → señálalo y ofrece moverlo a la estructura canónica.
