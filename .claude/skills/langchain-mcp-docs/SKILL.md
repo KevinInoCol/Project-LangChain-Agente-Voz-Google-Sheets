@@ -1,13 +1,24 @@
 ---
-name: langchain-docs-mcp
-description: Consulta la documentación oficial de LangChain mediante el MCP `docs-langchain` ANTES de escribir o modificar cualquier código de LangChain / LangGraph / LangSmith. Use when creating or editing agents, chains, tools, retrievers, RAG pipelines, memory, checkpointers or graphs; when any file imports langchain, langchain_core, langchain_community, langchain_openai, langgraph or langsmith; when migrating v0 code to v1; or when debugging ImportError / TypeError / deprecation warnings in those packages.
+name: langchain-mcp-docs
+description: Consulta la documentación oficial de LangChain con el MCP `docs-langchain` (guías, tutoriales, patrones) ANTES de escribir o modificar cualquier código de LangChain / LangGraph / LangSmith. Se usa SIEMPRE junto con `langchain-mcp-reference` (firmas exactas vía el MCP `reference-langchain`). Use when creating or editing agents, chains, tools, retrievers, RAG pipelines, memory, checkpointers, middleware or graphs; when any file imports langchain, langchain_core, langchain_community, langchain_openai, langgraph or langsmith; when migrating v0 code to v1; or when debugging ImportError / TypeError / deprecation warnings in those packages.
 ---
 
 # LangChain Docs vía MCP — primero la doc, después el código
 
 La API de LangChain cambia rápido (v0 → v1 movió agentes, prompts y memoria de sitio). El conocimiento del modelo está desactualizado por defecto. **Antes de escribir una sola línea de LangChain se consulta el MCP `docs-langchain`.**
 
-Este proyecto ya corre en **LangChain 1.x + LangGraph 1.x** (ver `requirements.txt`): `create_agent` de `langchain.agents`, `init_chat_model` de `langchain.chat_models`, checkpointer de LangGraph para memoria. Cualquier snippet de blog/tutorial anterior a v1 es sospechoso hasta verificarlo en la doc.
+Este proyecto corre en **LangChain 1.x + LangGraph 1.x** (ver `requirements.txt`): `create_agent` de `langchain.agents`, `init_chat_model` de `langchain.chat_models`, checkpointer de LangGraph para memoria. Cualquier snippet de blog/tutorial anterior a v1 es sospechoso hasta verificarlo en la doc.
+
+## Pareja obligatoria: docs + reference
+
+Esta skill y **`langchain-mcp-reference`** se usan **las dos, siempre**, cada vez que se escribe código LangChain:
+
+| Skill | MCP | Responde a |
+|---|---|---|
+| `langchain-mcp-docs` (esta) | `docs-langchain` | **¿Cómo se hace?** — qué patrón/API usar, ejemplos canónicos |
+| `langchain-mcp-reference` | `reference-langchain` | **¿Qué acepta exactamente?** — import, firma, parámetros, tipos |
+
+Orden: primero esta (elegir el patrón), luego `langchain-mcp-reference` (verificar cada símbolo antes de escribirlo).
 
 ## Cuándo se dispara
 
@@ -54,18 +65,19 @@ Reglas de selección de página:
 - Prefiere la página **actual (v1)** sobre cualquier cosa marcada legacy, classic o v0.
 - Para agentes/multi-agente/persistencia, la fuente autoritativa suele ser **LangGraph**.
 
-### 3. Verifica tres cosas antes de codear
+### 3. Verifica cada símbolo con `langchain-mcp-reference`
 
-De la página leída extrae, textualmente:
-- **Import exacto** (`from langchain.agents import create_agent`, no `langchain.agents.create_react_agent`).
-- **Firma real** del constructor/función — nombres de parámetros, no los que recuerdes.
-- **Paquete** al que pertenece (`langchain`, `langchain-core`, `langchain-classic`, `langgraph`).
+Por cada clase/función que vayas a usar, confirma con el MCP `reference-langchain` (`get_symbol`):
+- **Import exacto** y **paquete** (`langchain`, `langchain-core`, `langgraph`, `langchain-classic`).
+- **Firma real** — nombres de parámetros, cuáles son keyword-only, defaults.
+
+Los ejemplos de las guías a veces van un paso por detrás de la referencia: **si discrepan, la firma de `reference-langchain` manda.**
 
 ### 4. Di al usuario qué vas a usar (3-5 líneas)
 
 Antes de escribir código:
 
-> Voy a usar `create_agent(model, tools=..., system_prompt=...)` de `langchain.agents` — doc `/oss/python/langchain/agents`. Memoria con `checkpointer` de LangGraph (`/oss/python/langgraph/persistence`), que es lo que ya usa `conversation_history.py`.
+> Voy a usar `create_agent(model, tools=..., system_prompt=...)` de `langchain.agents` — doc `/oss/python/langchain/agents`, firma verificada en `reference-langchain`. Memoria con `checkpointer` de LangGraph (`/oss/python/langgraph/persistence`), que es lo que ya usa `conversation_history.py`.
 
 ### 5. Escribe el código alineado a la doc
 
@@ -78,11 +90,17 @@ Antes de escribir código:
 
 ## Reglas duras
 
-- **Nunca escribas LangChain sin consultar el MCP primero**, aunque "sepas" la respuesta.
-- **Si el MCP no responde o el tema no aparece: detente y avisa.** No improvises una API.
+- **Nunca escribas LangChain sin consultar los dos MCPs primero**, aunque "sepas" la respuesta.
+- **Si un MCP no responde o el tema no aparece: detente y avisa.** No improvises una API.
 - **No mezcles v0 y v1** en el mismo archivo. Si algo solo existe en `langchain-classic`, dilo explícitamente en vez de instalarlo por inercia.
 - **No inventes rutas de doc.** Cita solo rutas que el MCP devolvió.
 - Si la doc contradice el código existente del proyecto, **señálalo** en vez de reescribir en silencio.
+
+## Contexto adicional
+
+- ¿No sabes qué buscar? → [references/topic-map.md](references/topic-map.md)
+- ¿LangChain o LangGraph para esta tarea? → [references/langchain-vs-langgraph.md](references/langchain-vs-langgraph.md)
+- ¿Migrando código v0 (AgentExecutor, LLMChain, RetrievalQA, memory)? → [references/migration-checklist.md](references/migration-checklist.md)
 
 ## Verificación rápida de que el MCP está disponible
 

@@ -25,6 +25,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 from langchain.agents import create_agent
+from langchain.agents.middleware import SummarizationMiddleware
 from langchain.chat_models import init_chat_model
 
 from conversation_history import get_checkpointer
@@ -35,6 +36,13 @@ PROMPT_PATH = BASE_DIR / "prompt" / "prompt.yaml"
 CSV_PATH = BASE_DIR / "data" / "df_rent.csv"
 
 DEFAULT_MODEL = "openai:gpt-4.1-mini"
+
+#Ventana de memoria que ve el modelo (la conversación completa queda en voice_chat_log).
+#Al llegar a HISTORIAL_TRIGGER mensajes, los más antiguos se resumen y se
+#conservan íntegros los últimos HISTORIAL_KEEP. Ojo: son MENSAJES, no turnos;
+#una pregunta con tool genera ~4 (pregunta, tool call, resultado, respuesta).
+HISTORIAL_TRIGGER = ("messages", 20)
+HISTORIAL_KEEP = ("messages", 10)
 
 
 def load_dataframe() -> pd.DataFrame:
@@ -76,10 +84,16 @@ def build_agent(model: str = DEFAULT_MODEL, con_memoria: bool = True):
         agent.invoke({"messages": [...]}, config)
     """
     df = load_dataframe()
+    llm = init_chat_model(model)
 
     return create_agent(
-        init_chat_model(model),
+        llm,
         tools=[get_query_dataframe_tool(df)],
         system_prompt=load_system_prompt(df),
+        #Patrón de: /oss/python/langchain/short-term-memory — en v1 la ventana
+        #de historial se controla con middleware, no en la clase de memoria
+        middleware=[
+            SummarizationMiddleware(llm, trigger=HISTORIAL_TRIGGER, keep=HISTORIAL_KEEP)
+        ],
         checkpointer=get_checkpointer() if con_memoria else None,
     )

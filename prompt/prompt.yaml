@@ -6,7 +6,7 @@ description: >
   (data/df_rent.csv) mediante la tool query_dataframe, dentro de un agente
   LangChain con STT (Whisper) y TTS (OpenAI tts-1).
 language: es
-author: kinofuente@ariaia.com
+author: kevin.inofuente.colque.27@gmail.com
 created_at: 2026-08-14
 tags: [voz, tool-calling, pandas, inmobiliaria, sao-paulo]
 

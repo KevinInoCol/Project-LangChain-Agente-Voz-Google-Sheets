@@ -7,7 +7,7 @@ description: Estructura canónica para proyectos de agentes de voz (LangChain v1
 
 Estructura de referencia tomada de **Proyecto-Agente-de-Voz-con-LangChain-y-Whisper**. Todo proyecto de voz nuevo la respeta salvo que el usuario diga explícitamente lo contrario.
 
-Antes de escribir código LangChain, aplica también la skill **`langchain-docs-mcp`** (consultar la doc oficial vía MCP). Para el contenido del prompt, la skill global **`agent-prompt-yaml-format`**.
+Antes de escribir código LangChain, aplica también las skills **`langchain-mcp-docs`** y **`langchain-mcp-reference`** (doc oficial y firmas de la API vía los MCPs de LangChain). Para el contenido del prompt, la skill global **`agent-prompt-yaml-format`**.
 
 ## Layout canónico
 

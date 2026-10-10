@@ -2,7 +2,7 @@
 
 Esqueletos mínimos. Adáptalos al dominio, pero **no cambies la ubicación de los archivos ni los
 nombres de las variables de entorno**. Verifica las APIs de LangChain con el MCP `docs-langchain`
-antes de copiar (skill `langchain-docs-mcp`).
+antes de copiar (skills `langchain-mcp-docs` y `langchain-mcp-reference`).
 
 ---
 
